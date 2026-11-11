@@ -78,17 +78,22 @@ arms the exit on a single leg.
   orders), SL scenario (buyback 1920, +1.05% → `STOP_LOSS`, `CLOSED`,
   exactly 2 exit orders), plus the scripted harness (partial fills
   0.4 + 0.6, no arming on one leg, duplicate exit refused).
-- **Live data-only run: NOT completed from this VM — Bybit TestNet is
-  geo-blocked here.** The node builds correctly (factories registered,
-  data client created) and attempts the right endpoint, but the
-  connection fails: `Failed to connect to
-  wss://stream-testnet.bybit.com/v5/public/option ... InvalidContentType`,
-  and REST returns HTTP 403 `The Amazon CloudFront distribution is
-  configured to block access from your country.` Full log:
-  `live-run-1.log`. **Run `run_live.py` from the user's own machine
-  (or any network not blocked by CloudFront) to see live discovery.**
-  No orders were placed anywhere; `--live-testnet` without keys exits
-  with an error (verified).
+- **Live data-only run: VERIFIED 11 Nov 2026 on the user's Windows
+  laptop (Python 3.12.10, Nautilus 1.231.0).** Connected to both
+  Bybit TestNet websockets, loaded 1,439 instruments, received a real
+  BTC price of 73,774.75 USDT, and discovered the ATM straddle live:
+  `ATM SELECTED strike=73750 expiry=2026-11-12 08:00:00+00:00
+  CALL=BTC-12NOV26-73750-C-USDT-OPTION.BYBIT
+  PUT=BTC-12NOV26-73750-P-USDT-OPTION.BYBIT (ref BTC=73774.75)`,
+  subscribed to both legs' quotes, and dry-ran the entry
+  (`DRY RUN — would submit: ENTRY SELL CALL/PUT ... qty=1.00`).
+  No orders were placed — data-only mode by design. Three live bugs
+  found and fixed along the way are documented below.
+- **Live TestNet orders (`--live-testnet`): NOT yet run** — needs the
+  user's TestNet API keys (UTA account) on his own machine.
+- **From this VM, Bybit is geo-blocked** (WS connect fails,
+  REST HTTP 403 CloudFront country block; full log `live-run-1.log`).
+  `--live-testnet` without keys exits with an error (verified).
 
 ## Findings worth knowing before the demo
 
