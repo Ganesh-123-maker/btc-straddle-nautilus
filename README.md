@@ -138,3 +138,13 @@ Bybit has no instruments channel and `on_instrument` alone may not
 deliver them all. Re-test after pulling: `pytest` + `backtest.py`,
 then `run_live.py --seconds 60` — it should now print
 `ATM SELECTED strike=...` and `Reference BTC price: ...`.
+
+Second live bug (11 Nov 2026, second run): after the symbol fix the
+node subscribed to BTCUSDT-SPOT quotes, but still sat in DISCOVERING
+for 60s — no reference tick, no option ever arrived. Cause: the
+Bybit instrument provider loads nothing by default
+(`load_all=False`, node warns "No loading configured"). Fixed with
+`instrument_provider=InstrumentProviderConfig(load_all=True)` on the
+data client in `run_live.py`, plus a one-time "Discovery waiting"
+diagnostic in `strategy.py` if 0 options are ever seen after the
+reference price arrives.

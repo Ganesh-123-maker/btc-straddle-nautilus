@@ -27,7 +27,7 @@ from nautilus_trader.adapters.bybit import (
     BybitLiveExecClientFactory,
     BybitProductType,
 )
-from nautilus_trader.config import LoggingConfig, TradingNodeConfig
+from nautilus_trader.config import InstrumentProviderConfig, LoggingConfig, TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import InstrumentId  # noqa: F401  (kept for clarity)
 from nautilus_trader.trading.config import ImportableStrategyConfig
@@ -63,6 +63,16 @@ def build_node(settings) -> TradingNode:
         api_secret=settings.api_secret,
         product_types=(BybitProductType.OPTION, BybitProductType.SPOT),
         environment=BybitEnvironment.TESTNET,  # TESTNET — never mainnet
+        # REQUIRED: InstrumentProviderConfig.load_all defaults to False,
+        # and without it NO instruments are loaded on start — the node
+        # logs "No loading configured: ensure either `load_all=True` or
+        # there are `load_ids`". That was the second live bug (11 Nov
+        # 2026, second run): the reference symbol was fixed, the node
+        # subscribed to BTCUSDT-SPOT quotes, but no instrument was ever
+        # loaded, so no quote tick and no option ever arrived and the
+        # strategy sat in DISCOVERING for the full 60s. load_all=True
+        # loads every Option + Spot instrument via REST on start.
+        instrument_provider=InstrumentProviderConfig(load_all=True),
     )
 
     node_config = TradingNodeConfig(

@@ -98,6 +98,7 @@ class BtcShortStraddle(Strategy):
         self._options_seen: dict[InstrumentId, OptionContract] = {}
         self._entry_order_ids: set = set()
         self._exit_order_ids: set = set()
+        self._logged_discovery_wait: bool = False
 
     # ------------------------------------------------------------------
     # Start-up
@@ -151,6 +152,12 @@ class BtcShortStraddle(Strategy):
         except Exception:  # noqa: BLE001 — cache read must never break selection
             pass
         if not self._options_seen:
+            # One-time diagnostic: if this ever logs live, instruments
+            # are not being loaded at all (see load_all in run_live.py).
+            if not self._logged_discovery_wait:
+                self._logged_discovery_wait = True
+                self.log.info("Discovery waiting: reference price set, "
+                              "but 0 option instruments seen/loaded yet")
             return
         legs = [
             OptionLeg(
