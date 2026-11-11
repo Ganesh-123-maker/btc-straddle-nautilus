@@ -103,7 +103,7 @@ Subscription — in `on_start()` the strategy calls:
 
 ```python
 self.subscribe_instruments(Venue("BYBIT"))          # every instrument, once
-self.subscribe_quote_ticks(InstrumentId("BTCUSDT.BYBIT"))  # reference price
+self.subscribe_quote_ticks(InstrumentId("BTCUSDT-SPOT.BYBIT"))  # reference price
 ```
 
 Every option Bybit publishes then arrives in `on_instrument()`, where

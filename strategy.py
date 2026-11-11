@@ -139,6 +139,17 @@ class BtcShortStraddle(Strategy):
         """Pick the ATM legs as soon as we have a reference price + options."""
         if self.straddle_state != "DISCOVERING" or self.reference_price is None:
             return
+        # Fallback: Bybit has no instruments channel — instruments arrive
+        # via polling, and on_instrument may not fire for every one.
+        # The cache is seeded with them (live run: "Seeded instrument
+        # status cache with 1467 entries"), so pull option contracts
+        # from the cache too, not only from on_instrument events.
+        try:
+            for inst in self.cache.instruments(venue=BYBIT):
+                if isinstance(inst, OptionContract):
+                    self._options_seen.setdefault(inst.id, inst)
+        except Exception:  # noqa: BLE001 — cache read must never break selection
+            pass
         if not self._options_seen:
             return
         legs = [

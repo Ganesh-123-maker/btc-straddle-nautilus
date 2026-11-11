@@ -43,7 +43,14 @@ def build_node(settings) -> TradingNode:
         strategy_path="strategy:BtcShortStraddle",
         config_path="strategy:BtcShortStraddleConfig",
         config={
-            "reference_instrument_id": "BTCUSDT.BYBIT",
+            # Bybit symbols need a product suffix in Nautilus 1.231.0:
+            # "BTCUSDT.BYBIT" is rejected with
+            #   ValueError: invalid Bybit symbol 'BTCUSDT': expected suffix
+            #   in ["-SPOT", "-LINEAR", "-INVERSE", "-OPTION"]
+            # (found live on Windows 11 Nov 2026 — the node connected to
+            # both websockets, then the reference subscription failed and
+            # discovery never ran). The spot symbol is BTCUSDT-SPOT.
+            "reference_instrument_id": "BTCUSDT-SPOT.BYBIT",
             "quantity": settings.quantity,
             "stop_loss_pct": settings.stop_loss_pct,
             "take_profit_pct": settings.take_profit_pct,

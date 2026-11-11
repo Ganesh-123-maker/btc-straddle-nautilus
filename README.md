@@ -124,3 +124,17 @@ arms the exit on a single leg.
   harness; the backtest engine fills market orders in full, so a live
   partial fill can only be observed on TestNet.
 - Data-only mode places no orders, so SL/TP never arms there — by design.
+
+## Live-run bug found and fixed (11 Nov 2026, on Windows)
+
+The first live data-only run connected to both Bybit websockets and
+seeded 1,467 instruments — then discovery never ran, because the
+reference symbol was wrong: `BTCUSDT.BYBIT` is rejected by Nautilus
+1.231.0 (`ValueError: invalid Bybit symbol 'BTCUSDT': expected suffix
+in ["-SPOT", "-LINEAR", "-INVERSE", "-OPTION"]`). Fixed to
+`BTCUSDT-SPOT.BYBIT` in `run_live.py`, and `_try_select_from_cache`
+now also pulls option contracts from the instrument cache, since
+Bybit has no instruments channel and `on_instrument` alone may not
+deliver them all. Re-test after pulling: `pytest` + `backtest.py`,
+then `run_live.py --seconds 60` — it should now print
+`ATM SELECTED strike=...` and `Reference BTC price: ...`.
