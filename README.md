@@ -148,3 +148,15 @@ Bybit instrument provider loads nothing by default
 data client in `run_live.py`, plus a one-time "Discovery waiting"
 diagnostic in `strategy.py` if 0 options are ever seen after the
 reference price arrives.
+
+Third live bug (11 Nov 2026, third run): instruments loaded (1,439)
+and a real BTC price arrived (73,776.10 USDT), yet the strategy
+still saw "0 option instruments". Cause: Bybit options are
+`CryptoOption`, not `OptionContract` — sibling Instrument classes,
+so `isinstance(x, OptionContract)` is False for every real Bybit
+option. Fixed in `strategy.py` with `is_option_instrument()`
+accepting both types (used in `on_instrument` and the cache
+fallback), plus a regression test
+`tests/test_live_discovery_filter.py` (19 tests now). The backtest
+never caught this because it uses pre-selected legs and never goes
+through discovery.

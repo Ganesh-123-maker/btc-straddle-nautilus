@@ -24,7 +24,7 @@ from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.enums import OptionKind, OrderSide, TimeInForce
 from nautilus_trader.model.events import OrderCanceled, OrderFilled, OrderRejected
 from nautilus_trader.model.identifiers import InstrumentId, Venue
-from nautilus_trader.model.instruments import OptionContract
+from nautilus_trader.model.instruments import CryptoOption, OptionContract
 from nautilus_trader.trading.strategy import Strategy
 
 from straddle_logic import (
@@ -39,6 +39,19 @@ from straddle_logic import (
 )
 
 BYBIT = Venue("BYBIT")
+
+# Bybit options arrive as CryptoOption, NOT OptionContract — the two are
+# sibling Instrument subclasses, so isinstance(x, OptionContract) is
+# False for every real Bybit option. The strategy filtered on
+# OptionContract only, so the third live run (11 Nov 2026) loaded 1,439
+# instruments and got a real BTC price (73,776.10) yet still saw
+# "0 option instruments". Both types are accepted everywhere below.
+OptionInstrument = OptionContract | CryptoOption
+
+
+def is_option_instrument(instrument) -> bool:
+    """True for any option contract, crypto or vanilla."""
+    return isinstance(instrument, (OptionContract, CryptoOption))
 
 
 class BtcShortStraddleConfig(StrategyConfig, frozen=True):
@@ -87,15 +100,15 @@ class BtcShortStraddle(Strategy):
         self.straddle_state: str = "DISCOVERING"  # DISCOVERING -> SELECTED -> ENTERING
         # ENTERING -> ENTERED -> EXITING -> CLOSED
         self.reference_price: float | None = None
-        self.call_instrument: OptionContract | None = None
-        self.put_instrument: OptionContract | None = None
+        self.call_instrument: OptionInstrument | None = None
+        self.put_instrument: OptionInstrument | None = None
         self.best_ask: dict[str, float] = {}  # "CALL"/"PUT" -> best ask
         self.best_bid: dict[str, float] = {}
         self.entry_premium: float | None = None
         self.exit_reason: str | None = None
         self.fills = FillTracker(target_qty=config.quantity)
         self.exit_guard = ExitGuard()
-        self._options_seen: dict[InstrumentId, OptionContract] = {}
+        self._options_seen: dict[InstrumentId, OptionInstrument] = {}
         self._entry_order_ids: set = set()
         self._exit_order_ids: set = set()
         self._logged_discovery_wait: bool = False
@@ -132,7 +145,7 @@ class BtcShortStraddle(Strategy):
     # ------------------------------------------------------------------
     def on_instrument(self, instrument) -> None:
         """Every instrument Bybit publishes arrives here, one at a time."""
-        if isinstance(instrument, OptionContract):
+        if is_option_instrument(instrument):
             self._options_seen[instrument.id] = instrument
             self._try_select_from_cache()
 
@@ -147,7 +160,7 @@ class BtcShortStraddle(Strategy):
         # from the cache too, not only from on_instrument events.
         try:
             for inst in self.cache.instruments(venue=BYBIT):
-                if isinstance(inst, OptionContract):
+                if is_option_instrument(inst):
                     self._options_seen.setdefault(inst.id, inst)
         except Exception:  # noqa: BLE001 — cache read must never break selection
             pass
@@ -178,7 +191,7 @@ class BtcShortStraddle(Strategy):
         put = self._options_seen[InstrumentId.from_str(put_leg.instrument_id)]
         self._select_legs(call, put)
 
-    def _select_legs(self, call: OptionContract, put: OptionContract) -> None:
+    def _select_legs(self, call: OptionInstrument, put: OptionInstrument) -> None:
         """Record the chosen legs, subscribe to their quotes, and enter."""
         self.call_instrument = call
         self.put_instrument = put
