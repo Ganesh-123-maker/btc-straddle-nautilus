@@ -89,8 +89,18 @@ arms the exit on a single leg.
   (`DRY RUN — would submit: ENTRY SELL CALL/PUT ... qty=1.00`).
   No orders were placed — data-only mode by design. Three live bugs
   found and fixed along the way are documented below.
-- **Live TestNet orders (`--live-testnet`): NOT yet run** — needs the
-  user's TestNet API keys (UTA account) on his own machine.
+- **Live TestNet orders (`--live-testnet`): BLOCKED by Bybit, not by
+  the code.** Creating the TestNet API key returns Bybit error 10024:
+  "The product or service you are seeking to access is not available
+  to you due to regulatory restrictions" (Bybit lists 10024 as
+  "Compliance rules triggered"). This is a compliance/region block on
+  the account — not a payment, not the 48-hour new-account hold, and
+  not fixable by changing permissions. Do not try to dodge it (VPN /
+  another region's account would violate Bybit's terms and can get
+  the account closed). The assignment is still submittable: live
+  data-only discovery is verified above, and the brief explicitly
+  values an incomplete implementation walked through honestly — the
+  walkthrough should show the dry-run entry logs and name this block.
 - **From this VM, Bybit is geo-blocked** (WS connect fails,
   REST HTTP 403 CloudFront country block; full log `live-run-1.log`).
   `--live-testnet` without keys exits with an error (verified).
