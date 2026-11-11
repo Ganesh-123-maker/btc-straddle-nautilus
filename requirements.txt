@@ -1,0 +1,10 @@
+# BTC Options Straddle — NautilusTrader + Bybit TestNet
+# Level 1: naked ATM short straddle. Level 2: automated 1% stop-loss / 2% take-profit.
+#
+# Verified against nautilus_trader 1.231.0 (Python 3.12).
+# NOTE: in 1.231.0 there is no separate `nautilus_trader[bybit]` extra any more —
+# the Bybit adapter ships inside the base package, so plain `nautilus_trader` is
+# enough. (`pip install "nautilus_trader[bybit]"` only prints a warning and still works.)
+
+nautilus_trader==1.231.0
+pytest==8.3.4
