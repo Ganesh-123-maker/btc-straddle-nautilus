@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.log
 logs/
+catalog/
 .env
 *.pem
 *.key

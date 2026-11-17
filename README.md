@@ -23,6 +23,12 @@ python3 -m venv .venv
 #    entry fills, TP fires at -2%, SL fires at +1%, no double-exit
 .venv/bin/python backtest.py
 
+# 3b. Raw data -> Nautilus conversion (see "Raw data -> Nautilus" below):
+#     raw CSVs in data/raw are parsed into QuoteTicks, written to a
+#     ParquetDataCatalog, and the SAME strategy is backtested on them.
+.venv/bin/python convert_raw_data.py --raw-dir data/raw --catalog catalog
+.venv/bin/python backtest_catalog.py
+
 # 4. Data-only live run (default — subscribes, discovers the ATM strike and
 #    prints quotes, places NO orders, needs no keys for public data)
 .venv/bin/python run_live.py --seconds 60
@@ -46,6 +52,10 @@ Bybit TestNet endpoints used by the adapter: `api-testnet.bybit.com`,
 | `strategy.py` | `BtcShortStraddle` — the Nautilus `Strategy` (Level 1 + Level 2) |
 | `run_live.py` | `TradingNode` + Bybit data/exec clients; data-only by default |
 | `backtest.py` | `BacktestEngine` run on synthetic quotes + a scripted quote-feed harness |
+| `convert_raw_data.py` | Raw CSV -> `QuoteTick` -> `ParquetDataCatalog` converter |
+| `backtest_catalog.py` | Same strategy + engine, fed with ticks loaded from the catalog |
+| `data/raw/` | Sample raw CSVs, one per leg (hand-made example — NOT real history) |
+| `tests/test_convert_raw_data.py` | pytest suite for the parser + catalog round-trip |
 | `tests/test_straddle_logic.py` | pytest suite for the pure logic |
 | `WALKTHROUGH.md` | The 10 review questions, answered in execution-flow order |
 | `.gitignore` | Keeps `.venv/`, logs and any key material out of git |
@@ -65,6 +75,56 @@ exit buys back only the still-open quantity of each leg, and an `exiting`
 flag plus an open-position check make a duplicate exit impossible. If only
 one leg fills, the strategy logs the one-legged state and waits — it never
 arms the exit on a single leg.
+
+## Raw data → Nautilus (convert_raw_data.py)
+
+Nautilus never reads a raw CSV directly — the strategy only ever sees
+typed objects. So raw market data has to be converted first, in three
+steps (this is the NautilusTrader docs guide "Loading External Data",
+applied to this project):
+
+1. **Parse** — `parse_raw_quotes()` turns each raw CSV row into a
+   `QuoteTick` (instrument ID, bid, ask, sizes, timestamp in ns).
+2. **Catalog** — `build_catalog()` writes the instrument definitions
+   and the ticks into a `ParquetDataCatalog` (Parquet files under
+   `catalog/`, rebuilt from scratch on every run).
+3. **Backtest** — `backtest_catalog.py` loads the ticks back out with
+   `load_catalog_ticks()` and feeds them to the SAME `BtcShortStraddle`
+   through the real `BacktestEngine`.
+
+```bash
+.venv/bin/python convert_raw_data.py --raw-dir data/raw --catalog catalog
+.venv/bin/python backtest_catalog.py   # expect: CLOSED / TAKE_PROFIT, 2 exit orders
+```
+
+Accepted raw format: columns `timestamp,bid,ask` or
+`timestamp,bid_price,ask_price` (optional `bid_size`/`ask_size`,
+default 1.00); timestamps as ISO `2026-01-05T09:00:00Z` or
+histdata-style `20260105 090000000`. Lines starting with `#` are
+comments. Bad rows raise `ValueError` with file + row number
+(non-positive price, bid > ask, unparseable timestamp, empty file) —
+prices are never invented. Ticks are sorted ascending by timestamp
+(the catalog requires it). The two leg files are found by filename:
+call must contain `-C-`, put must contain `-P-`, and the strike comes
+from the filename, e.g. `BTC-25DEC26-120000-C-USDT-OPTION.csv`.
+
+**What the sample files are — and are not:** `data/raw/` holds SMALL
+hand-made example files (6 ticks per leg, the take-profit price path:
+entry 1900, asks fall to 1860, −2.1%). They are labelled as samples in
+their header comments. They are NOT real Bybit history — no real raw
+file was supplied. To use real data, drop your CSVs into `data/raw/`
+in the format above (same filename pattern, one file per leg) and
+re-run the two commands; nothing else needs to change.
+
+**Version warning:** the docs guide targets NautilusTrader 2.x, whose
+helpers do NOT exist in this project's pinned 1.231.0 — verified
+against the installed package: no `persistence.external.readers.CSVReader`,
+no `testkit.providers.TestDataProvider`, and no
+`ParquetDataCatalog.write_instruments / write_quote_ticks /
+query_quote_ticks`. This project therefore uses a small stdlib parser
+plus the 1.231.0 generic API: `catalog.write_data(data)` for writing
+and `catalog.query(QuoteTick, identifiers=[...])` for reading.
+`convert_raw_data.py` documents this in its module docstring.
 
 ## Verified results (2026-11-06, nautilus_trader 1.231.0, Python 3.12)
 

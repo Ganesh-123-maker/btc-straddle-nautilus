@@ -1,0 +1,14 @@
+# SAMPLE DATA — hand-made illustrative example, NOT real Bybit history.
+# No real Bybit option history was supplied, so these rows are written by
+# hand to demonstrate the raw -> Nautilus conversion. The price path is
+# the take-profit path from backtest.py: entry fills at the t1 bids
+# (call 1000 + put 900 = 1900), asks then fall to 980 + 880 = 1860 (-2.1%).
+# Format: timestamp (ISO), bid_price, ask_price. Timestamps are minutes
+# from 2026-01-05 09:00 UTC.
+timestamp,bid_price,ask_price
+2026-01-05T09:00:00Z,1000.00,1005.00
+2026-01-05T09:01:00Z,1000.00,1005.00
+2026-01-05T09:02:00Z,990.00,995.00
+2026-01-05T09:03:00Z,975.00,980.00
+2026-01-05T09:04:00Z,975.00,980.00
+2026-01-05T09:05:00Z,900.00,905.00

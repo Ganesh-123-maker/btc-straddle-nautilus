@@ -20,6 +20,13 @@ B. Scripted quote-feed harness (pure logic, no engine): a tick-by-tick
 HONEST LIMIT: the quotes and instruments here are synthetic. This proves
 the strategy logic and the engine wiring — it does NOT prove live Bybit
 fill behaviour. That needs the TestNet run (run_live.py --live-testnet).
+The catalog path now exists alongside this synthetic path:
+convert_raw_data.py turns raw CSV files into QuoteTicks in a
+ParquetDataCatalog, and backtest_catalog.py runs the SAME strategy and
+engine on the ticks loaded back out of the catalog. The sample files in
+data/raw/ are hand-made examples (NOT real Bybit history) — the catalog
+path proves the conversion + engine wiring on file-based data, not live
+fill behaviour either.
 """
 
 from __future__ import annotations
