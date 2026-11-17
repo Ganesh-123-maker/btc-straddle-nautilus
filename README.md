@@ -99,8 +99,11 @@ applied to this project):
 
 Accepted raw format: columns `timestamp,bid,ask` or
 `timestamp,bid_price,ask_price` (optional `bid_size`/`ask_size`,
-default 1.00); timestamps as ISO `2026-01-05T09:00:00Z` or
-histdata-style `20260105 090000000`. Lines starting with `#` are
+default 1.00); timestamps as ISO `2026-01-05T09:00:00Z`, space-separated
+ISO with offset (`2020-01-30 15:28:09.820000+00:00`, the TrueFX form),
+or histdata-style `20260105 090000000`. Real histdata ASCII tick files
+have NO header — rows are `20260105 090000000,bid,ask`; those are
+detected and treated as `timestamp,bid,ask`. Lines starting with `#` are
 comments. Bad rows raise `ValueError` with file + row number
 (non-positive price, bid > ask, unparseable timestamp, empty file) —
 prices are never invented. Ticks are sorted ascending by timestamp
@@ -108,18 +111,43 @@ prices are never invented. Ticks are sorted ascending by timestamp
 call must contain `-C-`, put must contain `-P-`, and the strike comes
 from the filename, e.g. `BTC-25DEC26-120000-C-USDT-OPTION.csv`.
 
-**What the sample files are — and are not:** `data/raw/` holds SMALL
-hand-made example files (6 ticks per leg, the take-profit price path:
-entry 1900, asks fall to 1860, −2.1%). They are labelled as samples in
-their header comments. They are NOT real Bybit history — no real raw
-file was supplied. To use real data, drop your CSVs into `data/raw/`
-in the format above (same filename pattern, one file per leg) and
-re-run the two commands; nothing else needs to change.
+**Real raw data (17 Nov 2026) — `data/raw-real/`:** the docs' own
+fallback raw data, obtained for real: `truefx-audusd-ticks.csv`,
+100,000 AUD/USD TrueFX ticks, 2020-01-30 15:28:09.820 UTC →
+2020-01-31 20:59:54.501 UTC, downloaded from the NautilusTrader repo
+(tag `v1.231.0`, same version pinned here — URL, md5 and full
+provenance in `data/raw-real/README.md`). It is FX spot data, NOT BTC
+options — there is no BTC options raw data in the NautilusTrader docs.
+`backtest_fx_catalog.py` runs it: parse → catalog `catalog-fx/`
+(100,000 ticks) → query back → real `BacktestEngine` with a
+tick-counting strategy. Verified 17 Nov: **20,000 / 20,000 ticks seen
+by the strategy, no ticks lost, no orders placed** (20,000 is the
+docs' how-to sample size). FX ticks can't drive the straddle — one
+instrument, no call+put pair — so this proves the pipeline, not the
+strategy.
+
+```bash
+.venv/bin/python backtest_fx_catalog.py   # expect: [FX-CATALOG] PASS: 20000 real ticks ...
+```
+
+**What the sample files are — and are not:** `data/raw/` still holds
+SMALL hand-made example files (6 ticks per leg, the take-profit price
+path: entry 1900, asks fall to 1860, −2.1%). They are labelled as
+samples in their header comments. They are NOT real Bybit history —
+no real BTC options raw data could be obtained: Bybit public REST
+(mainnet AND testnet tickers) returns HTTP 403 CloudFront country
+block, and histdata.com anonymous download does not work (free
+downloads need a registered account; none was created). To use real
+BTC options data, drop your CSVs into `data/raw/` in the format above
+(same filename pattern, one file per leg) and re-run the two commands;
+nothing else needs to change.
 
 **Version warning:** the docs guide targets NautilusTrader 2.x, whose
 helpers do NOT exist in this project's pinned 1.231.0 — verified
 against the installed package: no `persistence.external.readers.CSVReader`,
-no `testkit.providers.TestDataProvider`, and no
+no `testkit.providers` import path (1.231.0 spells it `test_kit`, and
+its `TestDataProvider` has `read_csv_ticks`, NOT the 2.x
+`quotes_from_histdata_csv` / `quotes_from_truefx_csv`), and no
 `ParquetDataCatalog.write_instruments / write_quote_ticks /
 query_quote_ticks`. This project therefore uses a small stdlib parser
 plus the 1.231.0 generic API: `catalog.write_data(data)` for writing

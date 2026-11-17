@@ -25,8 +25,13 @@ exist there — verified against the installed package:
 
   * ``nautilus_trader.persistence.external.readers.CSVReader`` — MISSING
     (no ``nautilus_trader.persistence.external`` module at all).
-  * ``nautilus_trader.testkit.providers.TestDataProvider`` — MISSING
-    (no ``nautilus_trader.testkit`` module).
+  * ``nautilus_trader.testkit.providers`` — MISSING as spelled (the
+    1.231.0 module is ``nautilus_trader.test_kit.providers``, with an
+    underscore). A ``TestDataProvider`` DOES exist there, but with the
+    1.x API — ``read_csv_ticks`` (reads ``tests/test_data/...`` from a
+    source checkout, otherwise via fsspec from GitHub) — NOT the 2.x
+    ``quotes_from_histdata_csv`` / ``quotes_from_truefx_csv`` methods
+    the how-to calls.
   * ``ParquetDataCatalog.write_instruments / write_quote_ticks /
     query_quote_ticks`` — MISSING in 1.231.0.
 
@@ -40,6 +45,9 @@ What 1.231.0 *does* have, and what this module uses:
     generic read; ``catalog.query(QuoteTick, identifiers=[id])``
     replaces ``query_quote_ticks``. (There is also a
     ``catalog.quote_ticks(instrument_ids=[...])`` convenience wrapper.)
+  * ``nautilus_trader.test_kit.providers.TestInstrumentProvider.
+    default_fx_ccy("AUD/USD")`` — used by ``backtest_fx_catalog.py``
+    for the real TrueFX data (see ``data/raw-real/README.md``).
 
 So the parser here is a small stdlib ``csv`` parser we control, instead
 of a version-fragile helper copied from the 2.x docs. The raw format
@@ -49,6 +57,12 @@ accepted is the documented one:
     (optional ``bid_size`` / ``ask_size``, default 1.00)
   * timestamps: ISO ``2026-01-05T09:00:00Z`` or histdata-style
     ``20260105 090000000`` (``YYYYMMDD HHMMSSmmm``)
+  * HEADERLESS histdata rows: the real histdata ASCII tick files have
+    NO header — rows are ``20260105 090000000,bid,ask``. A headerless
+    file is detected by its first row (``YYYYMMDD HHMMSSmmm``) and
+    treated as ``timestamp,bid,ask``. (The TrueFX sample in
+    ``data/raw-real/`` DOES have a header; the histdata path is for
+    files downloaded from histdata.com.)
   * lines starting with ``#`` are comments and are skipped, so sample
     files can carry a header note saying what they are.
 
@@ -78,6 +92,10 @@ from nautilus_trader.persistence.catalog import ParquetDataCatalog
 from backtest import make_btc_option
 
 _HISTDATA_RE = re.compile(r"^(\d{8})\s+(\d{6})(\d{3})?$")
+
+# A headerless histdata data row: "20260105 090000000,1.12345,1.12347"
+# (YYYYMMDD HHMMSSmmm, bid, ask — no header line in the file).
+_HISTDATA_ROW_RE = re.compile(r"^\d{8}\s+\d{6}(\d{3})?\s*,")
 
 
 def _parse_timestamp(raw: str, source: str, row_no: int) -> int:
@@ -118,12 +136,21 @@ def _parse_price(raw: str, field: str, source: str, row_no: int) -> Decimal:
     return value
 
 
-def parse_raw_quotes(csv_path: str | Path, instrument) -> list[QuoteTick]:
+def parse_raw_quotes(
+    csv_path: str | Path,
+    instrument,
+    default_size: str = "1.00",
+) -> list[QuoteTick]:
     """Parse one raw CSV file into sorted Nautilus ``QuoteTick`` objects.
 
     ``instrument`` is the Nautilus instrument the ticks belong to (its
     ``instrument_id`` is stamped on every tick, so the catalog and the
     backtest can link ticks to the instrument definition).
+    ``default_size`` is the bid/ask size stamped on ticks when the file
+    has no size columns — it must match the instrument's
+    ``size_precision`` (e.g. ``"1"`` for AUD/USD, whose size precision
+    is 0; the simulated exchange rejects ticks whose size precision
+    does not match the instrument).
     """
     path = Path(csv_path)
     if not path.is_file():
@@ -134,6 +161,10 @@ def parse_raw_quotes(csv_path: str | Path, instrument) -> list[QuoteTick]:
         lines = [line for line in f if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
         raise ValueError(f"{path}: empty file — no header and no data rows")
+    # Headerless histdata files: the first row is already data
+    # ("20260105 090000000,bid,ask"), so treat it as timestamp,bid,ask.
+    if _HISTDATA_ROW_RE.match(lines[0].strip()):
+        lines = ["timestamp,bid,ask"] + lines
     reader = csv.DictReader(lines)
     if reader.fieldnames is None:
         raise ValueError(f"{path}: empty file — no header row")
@@ -167,8 +198,8 @@ def parse_raw_quotes(csv_path: str | Path, instrument) -> list[QuoteTick]:
                 "refusing to convert"
             )
         ts_ns = _parse_timestamp(row[field_map[ts_key]], str(path), row_no)
-        bid_size = (row[field_map[bid_size_key]] or "1.00") if bid_size_key else "1.00"
-        ask_size = (row[field_map[ask_size_key]] or "1.00") if ask_size_key else "1.00"
+        bid_size = (row[field_map[bid_size_key]] or default_size) if bid_size_key else default_size
+        ask_size = (row[field_map[ask_size_key]] or default_size) if ask_size_key else default_size
         ticks.append(QuoteTick(
             instrument_id=instrument.id,
             bid_price=Price.from_str(str(bid)),

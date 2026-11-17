@@ -137,3 +137,59 @@ def test_build_catalog_requires_both_legs(tmp_path):
         "timestamp,bid,ask\n2026-01-05T09:00:00Z,1000.00,1005.00\n")
     with pytest.raises(ValueError, match="exactly one call.*one put"):
         build_catalog(raw_dir, tmp_path / "catalog")
+
+
+# --- Headerless histdata files (real histdata ASCII tick files have NO
+# header line: rows are "20260105 090000000,bid,ask"). Fixtures below
+# are small synthetic rows in that exact documented format. ---
+
+def test_parser_headerless_histdata_rows(tmp_path):
+    path = _write(tmp_path, "hist.csv",
+                  "20260105 090000000,1000.00,1005.00\n"
+                  "20260105 090100000,990.00,995.00\n")
+    ticks = parse_raw_quotes(path, CALL)
+    assert len(ticks) == 2
+    assert str(ticks[0].bid_price) == "1000.00"
+    assert str(ticks[1].ask_price) == "995.00"
+    # Same instant as the ISO form.
+    iso = _write(tmp_path, "iso.csv",
+                 "timestamp,bid,ask\n2026-01-05T09:00:00Z,1000.00,1005.00\n")
+    assert parse_raw_quotes(iso, CALL)[0].ts_event == ticks[0].ts_event
+
+
+def test_parser_headerless_histdata_without_millis(tmp_path):
+    path = _write(tmp_path, "hist.csv",
+                  "20260105 090000,1000.00,1005.00\n")
+    ticks = parse_raw_quotes(path, CALL)
+    assert len(ticks) == 1
+    assert str(ticks[0].bid_price) == "1000.00"
+
+
+def test_parser_headerless_histdata_after_comment(tmp_path):
+    path = _write(tmp_path, "hist.csv",
+                  "# histdata ASCII tick file, no header\n"
+                  "20260105 090000000,1000.00,1005.00\n")
+    assert len(parse_raw_quotes(path, CALL)) == 1
+
+
+def test_parser_headerless_histdata_rejects_bad_row(tmp_path):
+    path = _write(tmp_path, "hist.csv",
+                  "20260105 090000000,1010.00,1005.00\n")
+    with pytest.raises(ValueError, match="bid.*> ask"):
+        parse_raw_quotes(path, CALL)
+
+
+def test_parser_truefx_iso_space_timestamp(tmp_path):
+    """The real TrueFX file's format: header + space-separated ISO
+    timestamp with microseconds and a +00:00 offset."""
+    from nautilus_trader.test_kit.providers import TestInstrumentProvider
+    audusd = TestInstrumentProvider.default_fx_ccy("AUD/USD")
+    path = _write(tmp_path, "truefx.csv",
+                  "timestamp,bid,ask\n"
+                  "2020-01-30 15:28:09.820000+00:00,0.67067,0.67070\n"
+                  "2020-01-30 15:28:09.823000+00:00,0.67067,0.67069\n")
+    ticks = parse_raw_quotes(path, audusd)
+    assert len(ticks) == 2
+    assert str(ticks[0].bid_price) == "0.67067"
+    assert str(ticks[0].ask_price) == "0.67070"
+    assert ticks[0].ts_event < ticks[1].ts_event
